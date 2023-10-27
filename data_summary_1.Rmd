@@ -1,0 +1,338 @@
+---
+title: "Data_Summary_1"
+output: html_document
+---
+## Libraries 
+```{r}
+library(tidyverse)
+```
+## Datasets 
+```{r}
+#test <- read.csv('https://raw.githubusercontent.com/hkular/stats_project/main/trips_by_county.csv%27)
+
+vmt_alameda<- read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/Alameda_VMT20.csv")
+vmt_sf<-read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/SanFrancisco_VMT20.csv")
+vmt_sanmateo<- read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/SanMateo_VMT20.csv")
+vmt_santaclara<- read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/SantaClara_VMT20.csv")
+vht_alameda <- read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/Alameda_VHT20.csv")
+vht_sf <- read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/SanFrancisco_VHT20.csv") 
+vht_sanmateo <- read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/SanMateo_VHT20.csv")
+vht_santaclara <-  read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/SantaClara_VHT20.csv")
+
+vht_df <- dplyr::bind_rows(list('Alameda'=vht_alameda, 
+                                'San Francisco' = vht_sf, 
+                                'San Mateo' =vht_sanmateo, 
+                                'Santa Clara' = vht_santaclara),
+                           .id = 'source')
+vmt_df <- dplyr::bind_rows(list('Alameda'=vht_alameda, 
+                                'San Francisco' = vht_sf, 
+                                'San Mateo' =vht_sanmateo, 
+                                'Santa Clara' = vht_santaclara)
+                           , .id = 'source')
+
+hospitalization_all = read_csv('https://raw.githubusercontent.com/hkular/stats_project/main/hospitalization_data.csv')
+
+trips_by_county<- read.csv('https://raw.githubusercontent.com/hkular/stats_project/main/trips_by_county.csv')
+trips_by_county_2019<- read.csv('https://raw.githubusercontent.com/hkular/stats_project/main/Trips_by_Distance%202019.csv')
+
+
+covid_data <-read_csv("https://raw.githubusercontent.com/hkular/stats_project/main/covid_cases_tests.csv")
+```
+
+## Data Cleaning and Validity Checks
+```{r}
+#hospitalization
+#to make the date a date and not a char
+#hospitalization_all <- data.frame(hospitalization)
+hospitalization_all$todays_date <- hospitalization_all$todays_date %>%
+  as.Date("%Y-%m-%d")
+
+#to get the necessary date range
+hospitalization_kept <- hospitalization_all%>%
+  filter(todays_date>='2020-03-29' & todays_date<='2020-09-30')%>%
+  na.omit(hospitalization_kept$hospitalized_covid_confirmed_patients)
+
+#Transportation density 
+#Evidently there are some outliers, where for one of a multitude of possible reasons the stations points were not recorded on those dates. We will filter out any days that are below 2 standard deviations of the mean observation percentage.
+
+summary(vht_df$`% Observed`)
+sd_obs = sd(vht_df$`% Observed`)
+lowest_obs = mean(vht_df$`% Observed`)- 2*sd(vht_df$`% Observed`)
+# clean dates to remove 0:00
+vht_df$Day <- gsub(x=vht_df$Day,pattern=" 0:00",replacement="",fixed=T)
+vmt_df$Day<- gsub(x=vmt_df$Day,pattern=" 0:00",replacement="",fixed=T)
+
+
+#dates converted to correct format for scale_x_date on plot
+covid_data$date <- covid_data$date %>% 
+  as.Date("%Y-%m-%d")
+
+covid_county_date <- covid_data %>%
+  filter(date >= "2020-04-01" & date <= "2020-09-30", area_type == "County", area %in% c("Alameda", "San Francisco", "San Mateo", "Santa Clara"))
+
+
+#change date from characters to date format
+trips_by_county$Date<-as.Date(trips_by_county$Date) 
+
+#Rename columns for easy access
+trips_by_county<-trips_by_county%>%
+  rename( postal_code = State.Postal.Code,
+        county_name = County.Name,
+        population_home = Population.Staying.at.Home,
+        pop_not_home = Population.Not.Staying.at.Home
+      
+                        )
+
+#### Load movement data for 2019 for comparison and perform the same manipulations on this dataframe as above. 
+
+
+trips_by_county_2019$Date<-as.Date(trips_by_county_2019$Date) 
+trips_by_county_2019<-trips_by_county_2019%>%
+  rename( postal_code = State.Postal.Code,
+        county_name = County.Name,
+        population_home = Population.Staying.at.Home,
+        pop_not_home = Population.Not.Staying.at.Home)
+trips_by_county_2019$short_trips<- (trips_by_county_2019$Number.of.Trips..1 + trips_by_county_2019$Number.of.Trips.1.3 + trips_by_county_2019$Number.of.Trips.3.5 + trips_by_county_2019$Number.of.Trips.5.10)/1000
+trips_by_county_2019$med_trips<-(trips_by_county_2019$Number.of.Trips.10.25+trips_by_county_2019$Number.of.Trips.25.50)/1000
+trips_by_county_2019$long_trips<- (trips_by_county_2019$Number.of.Trips.50.100 + trips_by_county_2019$Number.of.Trips.250.500 + trips_by_county_2019$Number.of.Trips...500)/1000
+``` 
+
+
+
+## Plots
+
+### Transportation Density  
+
+#### Vehicle Miles Traveled (VMT) 
+Vehicle Miles Traveled: The total miles driven by the vehicles during that time period for that geographical segment. When plotting this over spatial regions this quantity is simply the sum of the VMT from the individual detectors. This is available at all levels.
+
+```{r}
+vmt_df %>% 
+  ggplot(aes(Day, `% Observed`, color=source, group = source))+
+  geom_point(size=0.7, alpha = 0.5)+
+  geom_smooth()+
+  labs(title = 'Percent of Lane Points Observed Mar-Sept 2020 (VMT Data)', y = '% Observed', x = 'Day')+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))+
+  scale_color_brewer(palette = 'Spectral')
+
+vmt_df %>% 
+  filter(`% Observed`>=lowest_obs) %>%
+  ggplot(aes(Day, `% Observed`, color=source, group = source))+
+  geom_point(size=0.7, alpha = 0.5)+
+  geom_smooth()+
+  labs(title = 'Percent of Lane Points Observed (>40) Mar-Sept 2020 (VMT Data)', y = '% Observed', x = 'Day')+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))+
+  scale_color_brewer(palette = 'Spectral')
+
+vmt_df %>% 
+  filter(`% Observed`>=lowest_obs) %>%
+  ggplot(aes(x=Day, y=Avg, color=source, group= source))+
+  geom_point(size=0.7, alpha = 0.5)+ 
+  geom_smooth()+
+  labs(title = 'Average VHT Mar-Sept 2020 (VMT Data)', y = 'Average', x = 'Day')+
+  scale_color_brewer(palette = 'Spectral')+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+#### Vehicle Hourly Traffic (VHT)
+The total amount of time spent by all of the vehicles on the freeway. When plotting this over spatial regions this quantity is simply the sum of the VHT from the individual detectors. This is available at all levels.
+```{r}
+vht_df %>%
+  ggplot(aes(x = Day, y = `% Observed`, group = source, color = source))+
+  geom_point(size=0.7, alpha = 0.5)+
+  geom_smooth()+
+  labs(title = 'Percent of Lane Points Observed Mar-Sept 2020 (VHT Data)', y = '% Observed', x = 'Day')+
+  scale_color_brewer(palette = 'Spectral')+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+vht_df %>%
+  filter(`% Observed`>=lowest_obs) %>%
+  ggplot(aes(x = Day, y = `% Observed`, group = source, color = source))+
+  geom_point(size=0.7, alpha = 0.5)+
+  geom_smooth()+
+  labs(title = 'Percent of Lane Points Observed (>40) Mar-Sept 2020 (VHT Data)', y = '% Observed', x = 'Day')+
+  scale_color_brewer(palette = 'Spectral')+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+vht_df %>%
+  filter(`% Observed`>=lowest_obs) %>%
+  ggplot(aes(x = Day, y = Avg, group = source, color = source))+
+  geom_point(size=0.7, alpha = 0.5)+
+  geom_smooth()+
+  labs(title = 'Average VHT Mar-Sept 2020 (VHT Data)', y = 'Average', x = 'Day')+
+  scale_color_brewer(palette = 'Spectral')+
+  scale_x_discrete(guide = guide_axis(check.overlap = TRUE))+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+### Trips 
+
+#### Bin trips into short, medium or long to make it things easier. 
+
+Short trips could reflect people taking walks, going to the grocery, biking, going to work etc. Med trips are likely work-related or travel. Long trips are also likely travel to see friends and family or in some cases for work.
+
+```{r}
+trips_by_county$short_trips<- (trips_by_county$Number.of.Trips..1 + trips_by_county$Number.of.Trips.1.3 + trips_by_county$Number.of.Trips.3.5 + trips_by_county$Number.of.Trips.5.10)/1000
+trips_by_county$med_trips<-(trips_by_county$Number.of.Trips.10.25+trips_by_county$Number.of.Trips.25.50)/1000
+trips_by_county$long_trips<- (trips_by_county$Number.of.Trips.50.100 + trips_by_county$Number.of.Trips.250.500 + trips_by_county$Number.of.Trips...500)/1000
+```
+ 
+
+
+#### Number of trips taken as a function of location pre-pandemic
+
+```{r}
+
+#short trips
+
+ggplot(data = trips_by_county_2019, aes(x=Date, y = short_trips, color = county_name))  +
+  geom_smooth() +
+  geom_point(sixe=0.5, alpha = 0.5)+
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Short trips taken as a function of the county pre-pandemic", color = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Number of medium trips taken as a function of location pre-pandemic                                                                                                        
+ggplot(data = trips_by_county_2019, aes(x=Date, y = med_trips, color = county_name))  +
+  geom_smooth() + 
+  geom_point(sixe=0.5, alpha = 0.5)+
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Mid-distance trips taken as a function of the county pre-pandemic", color = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Number of long distance trips taken as a function of location pre-pandemic
+
+ggplot(data = trips_by_county_2019, aes(x=Date, y = long_trips, color = county_name))  +
+  geom_smooth() + 
+  geom_point(sixe=0.5, alpha = 0.5)+
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Long distance trips taken as a function of the county pre-pandemic", color = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                 
+```
+
+
+#### Number of trips taken as a function of location during the pandemic
+
+```{r}
+
+#Short trips
+
+ggplot(data = trips_by_county, aes(x=Date, y = short_trips, color = county_name))  +
+  geom_smooth() +  
+  geom_point(sixe=0.5, alpha = 0.5)+
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Short trips taken as a function of the county during pandemic", color = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Number of medium trips taken as a function of location during the pandemic
+                                                                                                        
+ggplot(data = trips_by_county, aes(x=Date, y = med_trips, color = county_name))  +
+  geom_smooth() + 
+  geom_point(sixe=0.5, alpha = 0.5)+
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Mid-distance trips taken as a function of the county during pandemic", color = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Number of long distance trips taken as a function of location during the pandemic
+
+ggplot(data = trips_by_county, aes(x=Date, y = long_trips, color = county_name))  +
+  geom_smooth() + 
+  geom_point(sixe=0.5, alpha = 0.5)+
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Long distance trips taken as a function of the county during pandemic", color = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                  
+```
+
+
+### Covid Test Cases 
+```{r}
+covid_county_date %>%
+  ggplot(aes(x = date, y = cases, color = area )) +
+  geom_point(position = "jitter", alpha = 0.4) +
+  geom_smooth(method = lm) +
+  theme_minimal() +
+  labs(x = "Date", y = "COVID-19 Case Count", title = "COVID-19 Cases in the Bay Area") +
+  scale_x_date(date_breaks = "1 month",
+               date_labels = "%b") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+covid_county_date %>%
+ggplot(aes(x = date, y = cases)) +
+  geom_bar (stat = "identity") +
+  scale_x_date(date_breaks = "1 month",
+               date_labels = "%b") + 
+  theme_minimal() +
+  labs(x = "Date", y = "COVID-19 Case Count", title = "COVID-19 Cases in the Bay Area") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+covid_county_date %>%
+ggplot(aes(x = date, y = cases, color = area )) +
+  geom_point(position = "jitter", alpha = 0.4) +
+  geom_smooth(method = lm) +
+  theme_minimal() +
+  labs(x = "Date", y = "COVID-19 Case Count", title = "COVID-19 Cases in the Bay Area") +
+  scale_x_date(date_breaks = "1 month",
+               date_labels = "%b") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~area)
+```
+
+### Covid Hospitalization
+
+#### Alameda 
+```{r}
+alameda_hosp<-hospitalization_kept %>% 
+  filter(county=='Alameda') 
+alameda_hosp%>% 
+  ggplot(aes(x=todays_date, y=hospitalized_covid_confirmed_patients))+
+  geom_smooth(method = lm)+
+  geom_point()+
+  labs(title="Alameda County Covid Hospitalizations", x="Date", y="COVID Confirmed Hospitalization Patients")
+
+
+```
+
+#### San Francisco 
+```{r}
+
+sanfran_hosp<-hospitalization_kept %>% 
+  filter(county=='San Francisco')
+sanfran_hosp%>% 
+  ggplot(aes(x=todays_date, y=hospitalized_covid_confirmed_patients))+
+  geom_smooth(method = lm)+
+  geom_point() +
+  labs(title="San Francisco County Covid Hospitalizations", x="Date", y="COVID Confirmed Hospitalization Patients")
+
+```
+
+#### Santa Clara 
+```{r}
+santaclara_hosp<-hospitalization_kept %>% 
+  filter(county=='Santa Clara')
+santaclara_hosp%>% 
+  ggplot(aes(x=todays_date, y=hospitalized_covid_confirmed_patients))+
+  geom_smooth(method = lm)+
+  geom_point() +
+  labs(title="Santa Clara County Covid Hospitalizations", x="Date", y="COVID Confirmed Hospitalization Patients")
+
+
+```
+
+#### San Mateo
+```{r}
+sanmateo_hosp<-hospitalization_kept %>% 
+  filter(county=='San Mateo')
+sanmateo_hosp%>% 
+  ggplot(aes(x=todays_date, y=hospitalized_covid_confirmed_patients))+
+  geom_smooth(method = lm)+
+  geom_point() +
+  labs(title="San Mateo County Covid Hospitalizations", x="Date", y="COVID Confirmed Hospitalization Patients")
+
+```
+

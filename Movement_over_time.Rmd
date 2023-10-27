@@ -1,0 +1,142 @@
+---
+title: "Trips by county"
+author: "Sunaina Martin"
+date: "11/8/2021"
+output: html_document
+---
+####Load the data into R
+
+This dataset from the Department of Transport Statistics uses cellular data to track people who spend more than 10 mins away from a home location.
+
+```{r}
+library(tidyverse)
+trips_by_county<- read.csv('https://raw.githubusercontent.com/hkular/stats_project/main/trips_by_county.csv')
+view(trips_by_county)
+summary(trips_by_county)
+```
+
+####change date from characters to date format
+
+```{r}
+trips_by_county$Date<-as.Date(trips_by_county$Date) 
+```
+
+####Rename columns for easy access
+
+```{r}
+trips_by_county<-trips_by_county%>%
+  rename( postal_code = State.Postal.Code,
+        county_name = County.Name,
+        population_home = Population.Staying.at.Home,
+        pop_not_home = Population.Not.Staying.at.Home
+      
+                        )
+```
+
+####Bin trips into short, medium or long to make it things easier. 
+
+Short trips could reflect people taking walks, going to the grocery, biking, going to work etc. Med trips are likely work-related or travel. Long trips are also likely travel to see friends and family or in some cases for work.
+
+```{r}
+trips_by_county$short_trips<- (trips_by_county$Number.of.Trips..1 + trips_by_county$Number.of.Trips.1.3 + trips_by_county$Number.of.Trips.3.5 + trips_by_county$Number.of.Trips.5.10)/1000
+trips_by_county$med_trips<-(trips_by_county$Number.of.Trips.10.25+trips_by_county$Number.of.Trips.25.50)/1000
+trips_by_county$long_trips<- (trips_by_county$Number.of.Trips.50.100 + trips_by_county$Number.of.Trips.250.500 + trips_by_county$Number.of.Trips...500)/1000
+view(trips_by_county)
+
+```
+ 
+####Load movement data for 2019 for comparison and perform the same manipulations on this dataframe as above. 
+
+```{r}
+trips_by_county_2019<- read.csv('https://raw.githubusercontent.com/hkular/stats_project/main/Trips_by_Distance%202019.csv')
+view(trips_by_county_2019)
+summary(trips_by_county_2019)
+trips_by_county_2019$Date<-as.Date(trips_by_county_2019$Date) 
+trips_by_county_2019<-trips_by_county_2019%>%
+  rename( postal_code = State.Postal.Code,
+        county_name = County.Name,
+        population_home = Population.Staying.at.Home,
+        pop_not_home = Population.Not.Staying.at.Home)
+trips_by_county_2019$short_trips<- (trips_by_county_2019$Number.of.Trips..1 + trips_by_county_2019$Number.of.Trips.1.3 + trips_by_county_2019$Number.of.Trips.3.5 + trips_by_county_2019$Number.of.Trips.5.10)/1000
+trips_by_county_2019$med_trips<-(trips_by_county_2019$Number.of.Trips.10.25+trips_by_county_2019$Number.of.Trips.25.50)/1000
+trips_by_county_2019$long_trips<- (trips_by_county_2019$Number.of.Trips.50.100 + trips_by_county_2019$Number.of.Trips.250.500 + trips_by_county_2019$Number.of.Trips...500)/1000
+view(trips_by_county_2019)
+
+
+``` 
+
+####Number of short trips taken as a function of location pre-pandemic
+
+```{r}
+short_trips_by_county_2019<-  ggplot(data = trips_by_county_2019, aes(x=Date, y = short_trips, fill = county_name))  +
+  geom_smooth() + 
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Short trips taken as a function of the county pre-pandemic", fill = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                                                                        
+short_trips_by_county_2019
+```
+
+
+####Number of medium trips taken as a function of location pre-pandemic
+
+```{r}
+med_trips_by_county_2019<-  ggplot(data = trips_by_county_2019, aes(x=Date, y = med_trips, fill = county_name))  +
+  geom_smooth() + 
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Mid-distance trips taken as a function of the county pre-pandemic", fill = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                                                                        
+med_trips_by_county_2019
+
+```
+
+####Number of long distance trips taken as a function of location pre-pandemic
+
+```{r}
+long_trips_by_county_2019<-  ggplot(data = trips_by_county_2019, aes(x=Date, y = long_trips, fill = county_name))  +
+  geom_smooth() + 
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Long distance trips taken as a function of the county pre-pandemic", fill = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                                                                        
+long_trips_by_county_2019
+```
+
+####Number of short trips taken as a function of location during the pandemic
+
+```{r}
+short_trips_by_county_2020<-  ggplot(data = trips_by_county, aes(x=Date, y = short_trips, fill = county_name))  +
+  geom_smooth() + 
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Short trips taken as a function of the county during pandemic", fill = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                                                                        
+short_trips_by_county_2020
+```
+
+
+####Number of medium trips taken as a function of location during the pandemic
+
+```{r}
+med_trips_by_county_2020<-  ggplot(data = trips_by_county, aes(x=Date, y = med_trips, fill = county_name))  +
+  geom_smooth() + 
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Mid-distance trips taken as a function of the county during pandemic", fill = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                                                                        
+med_trips_by_county_2020
+```
+
+####Number of long distance trips taken as a function of location during the pandemic
+
+```{r}
+long_trips_by_county_2020<-  ggplot(data = trips_by_county, aes(x=Date, y = long_trips, fill = county_name))  +
+  geom_smooth() + 
+  labs(x = "Date", y = "Number of trips taken (in the thousands)", title = "Long distance trips taken as a function of the county during pandemic", fill = "County") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+                                                                                                        
+long_trips_by_county_2020
+```
+
